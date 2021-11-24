@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-container_name_prefix="${PROJECT_NAME}_${SERVICE_NAME}"
+container_name_prefix="${PROJECT_NAME}-${SERVICE_NAME}-superset"
 container_id=$(docker ps --filter name="$container_name_prefix" --format {{.ID}})
 if [ -z "$container_id" ]
 then
