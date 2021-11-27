@@ -99,6 +99,9 @@ case "$action" in
   stop)
     "${cmd[@]}" down
     ;;
+  build)
+    "${cmd[@]}" build
+    ;;
   script)
     if [ $# -eq 0 ]
     then
