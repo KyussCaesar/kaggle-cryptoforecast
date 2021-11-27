@@ -1,9 +1,12 @@
+import(rpkgs)
+
 #' Create a new progress bar.
 pbar = \(msg, total) {
   pb <-
     progress_bar$new(
       total = total,
       clear = FALSE,
+      force = TRUE,
       format = sprintf("%s [:bar] :current/:total (:percent) :elapsed elapsed (:eta remain, :tick_rate/s)", msg),
       width = 110,
       show_after = 0

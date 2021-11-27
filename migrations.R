@@ -1,7 +1,5 @@
 import(db)
 
-migration <- db$migration
-
 MIGRATIONS = list(
   migration(
     name = 'trn create',
@@ -52,7 +50,15 @@ MIGRATIONS = list(
   migration(
     name = 'metrics idx run_id',
     up = 'CREATE INDEX IF NOT EXISTS idx_metrics_run_id ON metrics(run_id);'
+  ),
+  migration(
+    name = 'metrics add name',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS name TEXT;'
+  ),
+  migration(
+    name = 'metrics add mae',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS mae REAL;'
   )
 )
 
-db$runMigrations(MIGRATIONS)
+runMigrations(MIGRATIONS)

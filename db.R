@@ -1,3 +1,5 @@
+import(rpkgs)
+
 getPool = \() {
   if (is.null(.GlobalEnv[["DBPOOL"]])) {
     .GlobalEnv[["DBPOOL"]] = dbPool(
@@ -54,4 +56,10 @@ runMigrations = \(migrations) {
   })
 }
 
-getNewRunId = \() dbGetQuery(getPool(), 'SELECT gen_random_uuid()')[1,'gen_random_uuid']
+getNewRunId = \() {
+  run_id = dbGetQuery(getPool(), 'SELECT gen_random_uuid()')[1,'gen_random_uuid']
+  class(run_id) <- append(class(run_id), "run_id")
+  run_id
+}
+
+getQuery = \(...) setDT(dbGetQuery(getPool(), ...))
