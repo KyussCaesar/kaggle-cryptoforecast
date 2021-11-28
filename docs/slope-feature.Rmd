@@ -5,13 +5,19 @@ date: "2021-11-27"
 output: html_document
 ---
 
-```{r setup, echo=FALSE}
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r import}
 suppressPackageStartupMessages({
   import(rpkgs)
 })
 import(db)
 import(util)
 ```
+
+Experiment for pulling linear regression slope from Postgres.
 
 # Parameters
 
@@ -49,9 +55,6 @@ corr_ts = c()
 corr_close = c()
 corr_regr_slope = c()
 
-pb = pbar('Bootstrap sampling', numBootstraps)
-pb$tick(0)
-
 for (i in 1:numBootstraps) {
   rangeEnd = sample(df[,ts], 1)
   rangeStart = rangeEnd - as.difftime(windowSizeMins, units = 'mins')
@@ -71,8 +74,6 @@ for (i in 1:numBootstraps) {
   corr_regr_slope <- append(corr_regr_slope,
     cor(dfp[,regr_slope], dfp[,target], use = "complete.obs")
   )
-
-  pb$tick()
 }
 ```
 

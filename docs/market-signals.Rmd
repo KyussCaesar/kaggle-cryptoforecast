@@ -1,5 +1,5 @@
 ---
-title: "Market Signals"
+title: "Deriving features for \"market effects\""
 author: "Antony"
 date: "2021-11-28"
 output: html_document
@@ -15,8 +15,6 @@ suppressPackageStartupMessages({
 })
 import(db)
 ```
-
-# Deriving features for "market effects"
 
 The target variable in this competition is
 
@@ -83,7 +81,7 @@ t4 AS (
 SELECT * FROM t4
 '))
 
-df
+DT::datatable(head(df, 200))
 ```
 
 * `market_close_std` standardised close price over last `r windowSize` minutes, averaged across assets

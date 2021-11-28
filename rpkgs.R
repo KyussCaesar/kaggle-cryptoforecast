@@ -11,7 +11,8 @@ rpkgs = c(
   "here",
   "glue",
   "progress",
-  "rmarkdown"
+  "rmarkdown",
+  "DT"
 )
 
 for (p in rpkgs) {
@@ -38,6 +39,7 @@ for (p in rpkgs) {
     "Ckmeans.1d.dp",
     "here",
     "RPostgres",
+    "DT",
     # almost never needed in scripts, just RStudio
     "rmarkdown",
     "markdown"
