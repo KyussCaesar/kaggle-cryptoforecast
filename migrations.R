@@ -58,6 +58,98 @@ MIGRATIONS = list(
   migration(
     name = 'metrics add mae',
     up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS mae REAL;'
+  ),
+  migration(
+    name = 'metrics add aae',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS aae REAL;'
+  ),
+  migration(
+    name = 'metrics add rmse',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS rmse REAL;'
+  ),
+  migration(
+    name = 'metrics add trn_amt',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS trn_amt INTEGER;'
+  ),
+  migration(
+    name = 'metrics add tst_amt',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS tst_amt INTEGER;'
+  ),
+  migration(
+    name = 'metrics add trn_min_date',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS trn_min_date TIMESTAMP WITH TIME ZONE;'
+  ),
+  migration(
+    name = 'metrics add trn_max_date',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS trn_max_date TIMESTAMP WITH TIME ZONE;'
+  ),
+  migration(
+    name = 'metrics add tst_min_date',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS tst_min_date TIMESTAMP WITH TIME ZONE;'
+  ),
+  migration(
+    name = 'metrics add tst_max_date',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS tst_max_date TIMESTAMP WITH TIME ZONE;'
+  ),
+  migration(
+    name = 'metrics add mk_trn_started_at',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS mk_trn_started_at TIMESTAMP WITH TIME ZONE;'
+  ),
+  migration(
+    name = 'metrics add mk_trn_finished_at',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS mk_trn_finished_at TIMESTAMP WITH TIME ZONE;'
+  ),
+  migration(
+    name = 'metrics add mk_trn_duration',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS mk_trn_duration INTERVAL GENERATED ALWAYS AS (mk_trn_finished_at - mk_trn_started_at) STORED;'
+  ),
+  migration(
+    name = 'metrics add mk_tst_started_at',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS mk_tst_started_at TIMESTAMP WITH TIME ZONE;'
+  ),
+  migration(
+    name = 'metrics add mk_tst_finished_at',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS mk_tst_finished_at TIMESTAMP WITH TIME ZONE;'
+  ),
+  migration(
+    name = 'metrics add mk_tst_duration',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS mk_tst_duration INTERVAL GENERATED ALWAYS AS (mk_tst_finished_at - mk_tst_started_at) STORED;'
+  ),
+  migration(
+    name = 'metrics add model_fit_started_at',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS model_fit_started_at TIMESTAMP WITH TIME ZONE;'
+  ),
+  migration(
+    name = 'metrics add model_fit_finished_at',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS model_fit_finished_at TIMESTAMP WITH TIME ZONE;'
+  ),
+  migration(
+    name = 'metrics add model_fit_duration',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS model_fit_duration INTERVAL GENERATED ALWAYS AS (model_fit_finished_at - model_fit_started_at) STORED;'
+  ),
+  migration(
+    name = 'metrics add model_predict_started_at',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS model_predict_started_at TIMESTAMP WITH TIME ZONE;'
+  ),
+  migration(
+    name = 'metrics add model_predict_finished_at',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS model_predict_finished_at TIMESTAMP WITH TIME ZONE;'
+  ),
+  migration(
+    name = 'metrics add model_predict_duration',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS model_predict_duration INTERVAL GENERATED ALWAYS AS (model_predict_finished_at - model_predict_started_at) STORED;'
+  ),
+  migration(
+    name = 'metrics add num_evaluation_samples',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS num_evaluation_samples INTEGER'
+  ),
+  migration(
+    name = 'metrics add corr',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS corr REAL;'
+  ),
+  migration(
+    name = 'metrics add description',
+    up = 'ALTER TABLE metrics ADD COLUMN IF NOT EXISTS description TEXT;'
   )
 )
 

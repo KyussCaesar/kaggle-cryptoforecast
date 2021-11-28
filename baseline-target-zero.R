@@ -1,36 +1,37 @@
-#' Baseline Model: Target = 0
-import(db)
-import(metrics)
+import(run)
 
-ms = metrics()
-mt.name(ms, "baseline-target-zero")
-mt.started_at(ms)
+baselineTargetZero = \() {
+  doRun(
+    name = "baseline-target-zero test assets",
+    trnAmt = 1,
+    tstAmt = 60 * 24 * 7 * 2, # weeks
+    assets = getAllAssets()[,asset_id],
+    makeData = \(env, minDate, maxDate, assets, ...) {
+      selectStmt = glue('
+        SELECT asset_id, target
+        FROM trn
+        WHERE (ts BETWEEN $1 AND $2)
+          AND asset_id IN ({paste(assets, collapse = ", ")})
+      ')
 
-set.seed(573922)
+      print(selectStmt)
 
-dts = getQuery('SELECT DISTINCT ts FROM trn WHERE target IS NOT NULL;')
+      df = getQuery(selectStmt, params = list(minDate, maxDate))
+      env$x = df[,"asset_id"]
+      env$y = df[,"target"]
+    },
+    trainModel = \(model, trn, ...) {
+      model$description = 'target(asset, t) = 0'
+    },
+    predictModel = \(model, tst, ...) {
+      tst$yhat = vector(mode = "numeric", length = nrow(tst$x))
+      tst$yhat[1:length(tst$yhat)] <- 0
+    }
+  )
+}
 
-trnAmt = 6#0 * 24 * 30 * 2 # months
-tstAmt = 6#0 * 24 * 30 * 2 # months
+baselineTargetZero()
 
-lastTrainIdx = sample(trnAmt:(nrow(dts) - tstAmt - 15 - 1), 1)
-
-# minDate = dts[lastTrainIdx - trnAmt + 1,ts]
-# maxDate = dts[lastTrainIdx + 15 + tstAmt,ts]
-
-# trnIdxs = (lastTrainIdx - trnAmt + 1):lastTrainIdx
-# tstIdxs = (lastTrainIdx + 15 + 1):(lastTrainIdx + 15 + tstAmt)
-
-minDate = dts[lastTrainIdx + 15 + 1,ts]
-maxDate = dts[lastTrainIdx + 15 + tstAmt,ts]
-
-df = getQuery('SELECT ts, target FROM trn WHERE ts BETWEEN $1 AND $2 AND target IS NOT NULL;', params = list(minDate, maxDate))
-
-prediction = 0
-df$error = df[,"target"] - prediction
-
-ggplot(df, aes(error)) + geom_histogram()
-
-mae = median(abs(df[,error]))
-mt.mae(ms, mae)
-mt.finished_at(ms)
+for (i in 1:100) {
+  baselineTargetZero()
+}

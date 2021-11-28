@@ -1,0 +1,142 @@
+---
+title: "Market Signals"
+author: "Antony"
+date: "2021-11-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r import}
+suppressPackageStartupMessages({
+  import(rpkgs)
+})
+import(db)
+```
+
+# Deriving features for "market effects"
+
+The target variable in this competition is
+
+$$
+R(t) = \texttt{ln}\left(\frac{P(t+16)}{P(t+1)} - M(t)\right)
+$$
+
+where
+
+* $R(t)$ return of asset at $t$
+* $P(t)$ price of asset at $t$
+* $M(t)$ return of market at $t+16$
+
+Put simply, it's "(return of the asset) minus (return of the market)".
+
+Without any features for this, the model would have to infer the market state
+from the features for a particular asset, makes its job harder.
+
+Instead, lets help the model out by providing some information about the whole market.
+
+# Features
+
+```{r feature}
+windowSize = 42 # minutes
+df = getQuery(glue('
+WITH
+t1 AS (
+  SELECT
+    ts
+  , close - AVG(close)
+    OVER (PARTITION BY asset_id ORDER BY ts ASC ROWS {windowSize} PRECEDING)
+    AS close_centred
+  , STDDEV_SAMP(close)
+    OVER (PARTITION BY asset_id ORDER BY ts ASC ROWS {windowSize} PRECEDING)
+    AS close_stddev
+  FROM trn
+),
+t2 AS (
+  SELECT
+    *
+  , close_centred / NULLIF(close_stddev, 0)
+    AS close_std
+  FROM t1
+),
+t3 AS (
+  SELECT
+    ts
+  , AVG(close_std) AS market_close_std
+  , AVG(close_stddev) AS market_close_stddev
+  FROM t2
+  GROUP BY ts
+),
+t4 AS (
+  SELECT
+    *
+  , REGR_SLOPE(market_close_stddev, EXTRACT(EPOCH FROM ts)::REAL)
+    OVER (ORDER BY ts ASC ROWS {windowSize} PRECEDING)
+    AS market_close_stddev_slope
+  , LEAD(market_close_std, {windowSize})
+    OVER (ORDER BY ts ASC)
+    AS lead_market_close_std
+  FROM t3
+)
+SELECT * FROM t4
+'))
+
+df
+```
+
+* `market_close_std` standardised close price over last `r windowSize` minutes, averaged across assets
+* `market_close_stddev` standard deviation of close price over last `r windowSize` minutes, averaged across assets
+* `market_close_stddev_slope` slope of `market_close_stddev` over last `r windowSize` minutes
+
+# Time series plot
+
+```{r time plots}
+set.seed(25582)
+viewSize = 200
+randomDateIdx = sample(viewSize:nrow(df), 1)
+randomDateIdxs = (randomDateIdx - viewSize):randomDateIdx
+p =
+  df[randomDateIdxs,] |>
+  melt(id.vars = "ts") |>
+  ggplot(aes(ts, value)) +
+  geom_line() +
+  facet_wrap(~variable, ncol = 1, scales = "free")
+
+ggplotly(p)
+```
+
+# Correlation plots
+
+Compare the correlation against `market_close_std` `r windowSize` minutes in the future.
+
+```{r corr plots}
+pp = list()
+for (f in c("market_close_std", "market_close_stddev", "market_close_stddev_slope")) {
+  featureCorrelation = cor(df[,get(f)], df[,lead_market_close_std], use = "complete.obs")
+  p =
+    df |>
+    ggplot(aes_string(f, "lead_market_close_std")) +
+    geom_bin_2d() +
+    labs(
+      title = glue('{f} -> lead_market_close_std (corr: {featureCorrelation})')
+    )
+  
+  pp[[f]] = p
+}
+```
+
+```{r}
+ggplotly(pp[["market_close_std"]])
+```
+
+```{r}
+ggplotly(pp[["market_close_stddev"]])
+```
+
+```{r}
+ggplotly(pp[["market_close_stddev_slope"]])
+```
+
+The linear correlations are not very strong, will be interesting to see what the model does with it.

@@ -3,6 +3,11 @@ library(DBI)
 
 import(db)
 import(util)
+import(metric)
+
+ms = metrics()
+mt.name(ms, "load data")
+mt.started_at(ms)
 
 loginfo("Load data/train.csv")
 trn = fread("data/train.csv")
@@ -31,23 +36,23 @@ setnames(details, "Weight", "asset_weight")
 setnames(details, "Asset_Name", "asset_name")
 details$asset_id = as.integer(details$asset_id)
 
-loginfo("Merge details into trn")
-trn = merge(trn, details, by = "asset_id")
-
 loginfo("Make missing values explicit")
 trn = tidyr::complete(trn, ts, asset_id)
 setDT(trn)
+
+loginfo("Merge details into trn")
+trn = merge(trn, details, by = "asset_id")
 
 loginfo("Load data into DB.")
 
 batchSize = 10000
 numBatches = ceiling(nrow(trn) / batchSize)
-pb = util$pbar("Loading training data into DB", numBatches)
+pb = pbar("Loading training data into DB", numBatches)
 
-util$debugit(batchSize)
-util$debugit(numBatches)
+debugit(batchSize)
+debugit(numBatches)
 
-poolWithTransaction(db$getPool(), \(conn) {
+poolWithTransaction(getPool(), \(conn) {
   dbExecute(conn, 'DELETE FROM trn;')
 
   pb$tick(0)
@@ -58,3 +63,5 @@ poolWithTransaction(db$getPool(), \(conn) {
     pb$tick()
   }
 })
+
+mt.started_at(ms)

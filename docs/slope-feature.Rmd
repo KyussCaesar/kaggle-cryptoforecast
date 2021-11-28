@@ -1,0 +1,115 @@
+---
+title: "Slope Feature"
+author: "Antony"
+date: "2021-11-27"
+output: html_document
+---
+
+```{r setup, echo=FALSE}
+suppressPackageStartupMessages({
+  import(rpkgs)
+})
+import(db)
+import(util)
+```
+
+# Parameters
+
+```{r}
+set.seed(235987)
+assetName = 'Bitcoin'
+numBootstraps = 5000
+windowSizeMins = 180
+```
+
+# Feature definition
+
+```{r}
+df = getQuery('
+SELECT
+  ts
+, asset_name
+, target
+, close
+, regr_slope(close, extract(epoch FROM ts)::REAL)
+  OVER (PARTITION BY asset_id ORDER BY ts ASC ROWS 10 PRECEDING)
+FROM trn
+WHERE asset_name = $1
+;',
+  params = list(assetName))
+
+setDT(df)
+```
+
+# Select bootstrap samples and calculate correlations
+
+```{r}
+t_end = c()
+corr_ts = c()
+corr_close = c()
+corr_regr_slope = c()
+
+pb = pbar('Bootstrap sampling', numBootstraps)
+pb$tick(0)
+
+for (i in 1:numBootstraps) {
+  rangeEnd = sample(df[,ts], 1)
+  rangeStart = rangeEnd - as.difftime(windowSizeMins, units = 'mins')
+
+  dfp = df[(ts > rangeStart) & (ts <= rangeEnd),]
+
+  t_end <- append(t_end, rangeEnd)
+
+  corr_ts <- append(corr_ts,
+    dfp[,ts] |> as.numeric() |> cor(dfp[,target], use = "complete.obs")
+  )
+
+  corr_close <- append(corr_close,
+    cor(dfp[,close], dfp[,target], use = "complete.obs")
+  )
+
+  corr_regr_slope <- append(corr_regr_slope,
+    cor(dfp[,regr_slope], dfp[,target], use = "complete.obs")
+  )
+
+  pb$tick()
+}
+```
+
+# Debug: plots of the data
+
+```{r}
+p1 =
+  df[ts < rangeEnd][ts > rangeStart] |>
+  melt(id.vars = 'ts', measure.vars = c('close', 'regr_slope', 'target')) |>
+  ggplot(aes(ts, value)) +
+  geom_line() +
+  facet_wrap(~variable, scales = "free", ncol = 1)
+
+ggplotly(p1)
+```
+
+```{r}
+p2 =
+  ggplot(df, aes(regr_slope, target)) +
+  geom_bin_2d()
+
+ggplotly(p2)
+```
+
+# Correlation violins
+
+```{r}
+dfCorrs = data.table(
+  t_end = t_end,
+  corr_ts = corr_ts,
+  corr_close = corr_close,
+  corr_regr_slope = corr_regr_slope
+)
+
+dfCorrs |>
+  melt(measure.vars = c("corr_ts", "corr_close", "corr_regr_slope")) |>
+  ggplot(aes(variable, value)) +
+  geom_hline(yintercept = 0) +
+  geom_violin()
+```
