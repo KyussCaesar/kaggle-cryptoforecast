@@ -1,0 +1,153 @@
+---
+title: "Model: Baseline: Average per asset (m.corr: 0.00188)"
+author: "Antony"
+date: "2021-11-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r import}
+suppressPackageStartupMessages({
+  import(rpkgs)
+})
+
+import(run)
+```
+
+Baseline model predict target = average value for the asset
+
+# Model
+
+```{r model}
+modelName = "baseline-avg"
+
+assets = getAllAssets()
+
+runModel = \() {
+  doRun(
+    name = modelName,
+    trnAmt = 60 * 24 * 7 * 1, # 1 week of data, chosen arbitrarily
+    tstAmt = 60 * 24 * 7 * 2, # 2 weeks, submission period will provide new data every 2 weeks
+    assets = assets[,asset_id],
+
+    makeData = \(env, minDate, maxDate, assets, ...) {
+      selectStmt = glue('
+        SELECT ts, asset_id, asset_name, target
+        FROM trn
+        WHERE (ts BETWEEN $1 AND $2)
+          AND asset_id IN ({paste(assets, collapse = ", ")})
+      ')
+
+      df = getQuery(selectStmt, params = list(minDate, maxDate))
+      
+      env$x = df[,.(ts, asset_id, asset_name)]
+      env$y = df[,.(target)]
+    },
+
+    trainModel = \(model, trn, ...) {
+      # give the model a description
+      model$description = 'mean of target'
+
+      model$getKeyForAsset = \(a) paste("asset-", a)
+      for (a in unique(trn$x[,asset_id])) {
+        idx = trn$x[,asset_id] == a
+        key = model$getKeyForAsset(a)
+        prediction = mean(trn$y[idx,target], na.rm = TRUE)
+        if (is.na(prediction)) prediction = 0
+        model[[key]] = prediction
+      }
+    },
+
+    predictModel = \(model, tst, ...) {
+      # use advanced machine learning algorithm to predict crypto movement
+      tst$yhat = vector(mode = "numeric", length = nrow(tst$x))
+      tst$yhat[1:length(tst$yhat)] <- NA
+  
+      for (a in unique(tst$x[,asset_id])) {
+        idx = tst$x[,asset_id] == a
+        key = model$getKeyForAsset(a)
+        tst$yhat[idx] <- model[[key]]
+      }
+    }
+  )
+}
+```
+
+# Method
+
+Same method as was used for the baseline "target = 0" model.
+
+```{r method, results=FALSE, warning=FALSE, cache=TRUE}
+numSamples = 610
+
+set.seed(205794)
+
+for (i in 1:numSamples) {
+  results = runModel()
+}
+```
+
+# Plots
+
+We can examine the results from the last run, as a sanity-check.
+
+```{r sanity, results=FALSE, cache=TRUE}
+df = results$tst$x
+df$y = results$tst$y$target
+df$yhat = results$tst$yhat
+
+set.seed(68420)
+
+# sample of data
+plotStart = sample(df[,ts], 1)
+plotEnd = plotStart + as.difftime(200, units = "mins")
+
+assets[sample(nrow(assets), 2),asset_name] |>
+  lapply(\(asset) {
+    df[asset_name == asset & ts > plotStart & ts < plotEnd] |>
+      melt(id.vars = c("ts", "asset_name"), measure.vars = c("y", "yhat")) |>
+      ggplot(aes(ts, value, colour = variable)) +
+      geom_line() +
+      facet_wrap(~asset_name, ncol = 1)
+  }) |>
+  print()
+```
+
+The competition metric is correlation between your predictions and the targets.
+
+Visualising this:
+
+```{r, echo=FALSE}
+lastRunCorr = cor(df$yhat, df$y, use = "complete.obs")
+p =
+  ggplot(df, aes(yhat, y)) +
+  geom_bin_2d() +
+  labs(
+    title = glue('yhat->y corr = {lastRunCorr}')
+  )
+
+ggplotly(p)
+```
+
+Remember, that's just for 1 run; we repeated that experiment `r numSamples` times!
+
+# Evaluation
+
+```{r}
+scores = getQuery('SELECT * FROM metrics WHERE name = $1', params = list(modelName))
+DT::datatable(scores[,.(run_id, corr, mae, aae, rmse)])
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+medianCorr = median(scores[,corr], na.rm = TRUE)
+p = ggplot(scores, aes(corr)) +
+  geom_histogram() +
+  geom_vline(xintercept = medianCorr) +
+  labs(title = "Distribution of correlation between target and prediction.")
+ggplotly(p)
+```
+
+Median correlation: `r median(scores[,corr], na.rm = TRUE)`.
