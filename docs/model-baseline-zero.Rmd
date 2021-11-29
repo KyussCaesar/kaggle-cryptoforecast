@@ -25,7 +25,7 @@ the same as saying "forecast that price will not change".
 # Model
 
 ```{r model}
-modelName = "baseline-zero small sample test"
+modelName = "baseline-zero"
 
 assets = getAllAssets()
 
