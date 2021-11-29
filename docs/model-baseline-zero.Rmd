@@ -1,0 +1,150 @@
+---
+title: "Model: Baseline: target = 0 (mae: 0.00177)"
+author: "Antony"
+date: "2021-11-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r import}
+suppressPackageStartupMessages({
+  import(rpkgs)
+})
+
+import(run)
+```
+
+Baseline "model" just predict the target is always zero.
+
+Note about the target, recall that the target is in log-space, so target = zero
+the same as saying "forecast that price will not change".
+
+# Model
+
+```{r model}
+modelName = "baseline-zero small sample test"
+
+assets = getAllAssets()
+
+runModel = \() {
+  doRun(
+    name = modelName,
+    trnAmt = 0, # no training data, we always forecast 0
+    tstAmt = 60 * 24 * 7 * 2, # 2 weeks, submission period will provide new data every 2 weeks
+    assets = assets[,asset_id],
+
+    makeData = \(env, minDate, maxDate, assets, ...) {
+      selectStmt = glue('
+        SELECT ts, asset_name, target
+        FROM trn
+        WHERE (ts BETWEEN $1 AND $2)
+          AND asset_id IN ({paste(assets, collapse = ", ")})
+      ')
+
+      df = getQuery(selectStmt, params = list(minDate, maxDate))
+      
+      # these are passed through as `trn` and `tst` for training and
+      # inference, respectively
+      # NB: in this case we don't actually use `x`, but doRun requires that we
+      # set something
+      env$x = df[,.(ts, asset_name)]
+      env$y = df[,.(target)]
+    },
+
+    trainModel = \(model, trn, ...) {
+      # normally would train a model in here, but we always forecast zero,
+      # so nothing to do
+      
+      # give the model a description
+      model$description = 'target(asset, t) = 0'
+    },
+
+    predictModel = \(model, tst, ...) {
+      # use advanced machine learning algorithm to predict crypto movement
+      tst$yhat = vector(mode = "numeric", length = nrow(tst$x))
+      tst$yhat[1:length(tst$yhat)] <- 0
+    }
+  )
+}
+```
+
+# Method
+
+I have defined a function called `doRun` which picks a random date inside the 
+competition data (`t1`), trains a model using the data between `(t1 - trnAmt):t1`,
+then evaluates the model using the data between `(t1 + 15):(t1 + 15 + tstAmt)`.
+(The ` + 15` is because we are doing 15-minute forecasts, avoid leakage).
+
+You can check out the code in GitHub if you are interested, [link here](https://github.com/KyussCaesar/kaggle-cryptoforecast/blob/master/run.R)
+
+I will run this function a number of times in order to get a distribution of the
+evaluation metrics.
+
+```{r method, results=FALSE, warning=FALSE, cache=TRUE}
+numSamples = 610
+
+set.seed(205794)
+
+for (i in 1:numSamples) {
+  results = runModel()
+}
+```
+
+# Plots
+
+We can examine the results from the last run, as a sanity-check.
+
+```{r sanity, results=FALSE, cache=TRUE}
+df = results$tst$x
+df$y = results$tst$y$target
+df$yhat = results$tst$yhat
+DT::datatable(df[sample(200)])
+
+# sample of data
+plotStart = sample(df[,ts], 1)
+plotEnd = plotStart + as.difftime(200, units = "mins")
+
+assets[sample(nrow(assets), 2),asset_name] |>
+  lapply(\(asset) {
+    df[asset_name == asset & ts > plotStart & ts < plotEnd] |>
+      melt(id.vars = c("ts", "asset_name")) |>
+      ggplot(aes(ts, value, colour = variable)) +
+      geom_line() +
+      facet_wrap(~asset_name, ncol = 1)
+  }) |>
+  print()
+```
+
+Yep, they all zeros.
+
+# Evaluation
+
+`doRun` writes results to the DB, we can pull them from there.
+
+```{r}
+scores = getQuery('SELECT * FROM metrics WHERE name = $1', params = list(modelName))
+DT::datatable(scores[,.(run_id, corr, mae, aae, rmse)])
+```
+
+Hmm, notice the correlation is missing for all of them? Is there a bug?
+No; you cannot compute the correlation between two variables if one of them has
+zero variance. In our case we always predict zero, the variance in our predictions
+is zero and therefore the correlation is undefined.
+
+Probably that's "um, no shit sherlock" to stats people but it was news to me haha.
+
+Let's take a look at Median Absolute Error instead, which I have abbreviated as `mae`
+just to be confusing.
+
+```{r}
+p = ggplot(scores, aes(mae)) +
+  geom_histogram()
+ggplotly(p)
+```
+
+MAE is pretty small already, gonna be a tough competition!!
+
+Mean mae: `r mean(scores[,mae], na.rm = TRUE)`
