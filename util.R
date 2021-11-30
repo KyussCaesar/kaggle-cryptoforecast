@@ -42,6 +42,13 @@ standardiser = \(x) {
 
 predict.standardiser = \(s, x) (x - s$mean) / s$sd
 
+#' Interpolate n points between start and stop.
+linspace = compiler::cmpfun(function(start, stop, n) {
+  n2 = n - 1
+  d = stop - start
+  start + (0:n2)*(d/n2)
+})
+
 #' Create a plot from formula
 plotf = function(df, f, geom=geom_point, verbose=FALSE) {
 
