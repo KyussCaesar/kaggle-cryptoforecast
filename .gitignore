@@ -1,3 +1,4 @@
 data/
 docs/*_cache
 docs/*_files
+*.model

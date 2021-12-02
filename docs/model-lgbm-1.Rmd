@@ -1,0 +1,370 @@
+---
+title: "Model: Basic LGBM (m.corr: 0.xxxxx)"
+author: "Antony"
+date: "2021-12-01"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    theme: yeti
+    df_print: paged
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r import}
+suppressPackageStartupMessages({
+  import(rpkgs)
+})
+
+import(run)
+import(util)
+import(perfplot)
+```
+
+# Parameters
+```{r params}
+modelName = "smacd my lgbm up"
+trnAmt = 60 * 24 * 7 * 1 # 
+tstAmt = 60 * 24 * 7 * 2 # 2 weeks, submission period will provide new data every 2 weeks
+assets = getAllAssets()
+
+numSamples = 200
+```
+
+# Data
+```{r data}
+makeData = \(env, minDate, maxDate, assets, ...) {
+  selectStmt = glue('
+    WITH
+    t1 AS (
+      SELECT
+        ts
+      , asset_name
+      , target
+      , LAG(target, 15) OVER (PARTITION BY asset_id ORDER BY ts ASC)
+        AS target_lag_15
+      , REGR_SLOPE(vwap, EXTRACT(EPOCH FROM ts)::real)
+        OVER (PARTITION BY asset_id ORDER BY ts ASC ROWS 30 PRECEDING)
+        AS vwap_slope_30
+      , REGR_SLOPE(vwap, EXTRACT(EPOCH FROM ts)::real)
+        OVER (PARTITION BY asset_id ORDER BY ts ASC ROWS 7 PRECEDING)
+        AS vwap_slope_7
+      , AVG(close) OVER (PARTITION BY asset_id ORDER BY ts ASC ROWS 26 PRECEDING)
+        AS sma_close_26
+      , AVG(close) OVER (PARTITION BY asset_id ORDER BY ts ASC ROWS 12 PRECEDING)
+        AS sma_close_12
+      FROM trn
+      WHERE (ts BETWEEN $1 AND $2)
+        AND asset_id IN ({paste(assets, collapse = ", ")})
+    ),
+    t2 AS (
+      SELECT
+        *
+      , sma_close_26 - sma_close_12
+        AS smacd_close
+      FROM t1
+    ),
+    t3 AS (
+      SELECT
+        *
+      , REGR_SLOPE(smacd_close, EXTRACT(EPOCH FROM ts)::REAL)
+        OVER (PARTITION BY asset_name ORDER BY ts ASC ROWS 6 PRECEDING)
+        AS smacd_close_slope_6
+      FROM t2
+    )
+    SELECT * FROM t3
+  ')
+
+  df = getQuery(selectStmt, params = list(minDate, maxDate))
+
+  env$info = data.table(
+    ts = df[,ts],
+    asset_name = df[,asset_name]
+  )
+  
+  # df[,"ts_std"] <- as.integer(df[,ts])
+  df[,"ts"] <- NULL
+  df[,"asset_name"] <- NULL
+
+  env$y = df[,.(target)]
+  df[,"target"] <- NULL
+
+  env$x = df
+}
+```
+
+# Model
+```{r model}
+trainModel = \(model, trn, tst, ...) {
+  # give the model a description
+  model$description = 'lgbm basic test'
+  
+  model$nameOfStandardiserFor = \(name) glue('{name}_standardiser')
+  model$getStandardiser = \(name) model[[model$nameOfStandardiserFor(name)]]
+
+  # fit X standardisers
+  lapply(colnames(trn$x), \(name) {
+    model[[model$nameOfStandardiserFor(name)]] = as.standardiser(trn$x[[name]])
+  })
+  
+  # fit y standardiser
+  model$target_standardiser = as.standardiser(trn$y[,target])
+  
+  # define forward data transform
+  model$dataFwdTransform = \(env) {
+    # standardise Xs
+    lapply(colnames(env$x), \(name) {
+      env$x[[name]] = predict(model$getStandardiser(name), env$x[[name]])
+    })
+
+    # standardise the target
+    env$y[,"target"] = predict(model$target_standardiser, env$y[,target])
+  }
+
+  # fwdTranform the data
+  model$dataFwdTransform(trn)
+  model$dataFwdTransform(tst) # TODO should not be the same tst
+
+  trn = lgb.Dataset(
+    as.matrix(trn$x), 
+    colnames = colnames(trn$x),
+    label = trn$y[,target],
+    init_score = rep(0, nrow(trn$x))
+  )
+  
+  tst = lgb.Dataset(
+    as.matrix(tst$x),
+    colnames = colnames(tst$x),
+    label = tst$y[,target]
+  )
+
+  nrounds = 1000
+  
+  # train the model
+  model$lgbm = lgb.train(
+    data = trn,
+    params = list(
+      num_threads = max(parallel::detectCores(FALSE) - 1, 1),
+      seed = 5280,
+      num_iterations = nrounds,
+      num_leaves = 31,
+      max_depth = 0,
+      learning_rate = 0.002,
+      boosting = "gbdt",
+      min_data_in_leaf = 3,
+      min_sum_hessian_in_leaf = 0.01,
+      lambda_l1 = 0.01,
+      lambda_l2 = 0.01
+    ),
+    valids = list(
+      trn = trn,
+      tst = tst
+    ),
+    obj = "regression_l1",
+    eval = c(
+      "l2"
+    ),
+    record = TRUE,
+    early_stopping_rounds = 100
+  )
+}
+
+predictModel = \(model, tst, ...) {
+  # fwdTransform the data
+  # model$dataFwdTransform(tst)
+
+  # generate prediction
+  tst$yhat = predict(model$lgbm, as.matrix(tst$x))
+}
+```
+
+# Method
+```{r method, results=FALSE, warning=FALSE}
+set.seed(2057944)
+
+for (i in 1:numSamples) {
+  results = doRun(
+    name = modelName,
+    trnAmt = trnAmt,
+    tstAmt = tstAmt,
+    assets = assets[3,asset_id],
+    makeData = makeData,
+    trainModel = trainModel,
+    predictModel = predictModel
+  )
+}
+```
+
+# Debug Plots {.tabset}
+
+These plots are just for the last run of the model.
+
+```{r sanity, results=FALSE}
+set.seed(684280)
+
+pd = results$tst$x
+pd = cbind(pd, results$tst$info)
+pd$y = results$tst$y$target
+pd$yhat = results$tst$yhat
+
+sanityCheckingPlot = \(plotType) {
+  # sample of data
+  numPointsForPlot = 300
+  plotStart = sample(pd[1:(nrow(pd) - numPointsForPlot),ts], 1)
+  plotEnd = plotStart + as.difftime(numPointsForPlot, units = "mins")
+  
+  if (plotType == "features") {
+    pd[
+      asset_name == pd[sample(nrow(pd), 1),asset_name]
+      & ts > plotStart
+      & ts < plotEnd
+    ] |>
+      melt(id.vars = c("ts", "asset_name")) |>
+      ggplot(aes(ts, value, colour = variable)) +
+      geom_line() +
+      facet_wrap(~ asset_name)
+  } else if (plotType == "forecast") {
+    pd[
+      asset_name == pd[sample(nrow(pd), 1),asset_name]
+      & ts > plotStart
+      & ts < plotEnd,
+      .(ts, asset_name, y, yhat)
+    ] |>
+      melt(id.vars = c("ts", "asset_name")) |>
+      ggplot(aes(ts, value, colour = variable)) +
+      geom_line() +
+      facet_wrap(~ asset_name, ncol = 1)
+  }
+}
+
+plotAroundBiggest = \() {
+  maxy = max(pd[,y], na.rm = TRUE)
+  maxts = pd[y == maxy,ts]
+  maxasset = pd[y == maxy,asset_name]
+
+  plotStart = maxts - as.difftime(100, units = "mins")
+  plotEnd = maxts + as.difftime(100, units = "mins")
+  pd[
+    asset_name == maxasset
+    & ts > plotStart
+    & ts <= plotEnd,
+    .(ts, y, yhat)
+  ] |>
+    melt(id.vars = "ts") |>
+    ggplot(aes(x = ts, y = value, colour = variable)) +
+    geom_line()
+}
+
+getEvaluationLog = \(lgbm) {
+  iteration = 1:lgbm$current_iter()
+  getResult = \(dataset, metric) {
+    data.table(
+      iteration = iteration,
+      dataset = dataset,
+      metric = metric,
+      value = lgb.get.eval.result(lgbm, dataset, metric)
+    )
+  }
+  
+  eval_log = rbind(
+    getResult("trn", "l2"),
+    getResult("tst", "l2")
+  )
+  
+  eval_log
+}
+```
+
+## Forecasts
+```{r, echo=FALSE}
+ggplotly(sanityCheckingPlot("forecast"))
+```
+
+## Features
+```{r, echo=FALSE}
+ggplotly(sanityCheckingPlot("features"))
+```
+
+## Biggest Y
+```{r, echo=FALSE}
+ggplotly(plotAroundBiggest())
+```
+
+## Training Log
+```{r, echo=FALSE}
+eval_log = getEvaluationLog(results$model$lgbm)
+bestIter = eval_log[value == min(value),iteration]
+eval_log_plot = 
+  eval_log |>
+  ggplot(aes(x = iteration, y = value, colour = dataset)) +
+  geom_line() +
+  facet_wrap(~metric, scales = "free") +
+  geom_vline(xintercept = bestIter, colour = "black", alpha = 0.5)
+ggplotly(eval_log_plot)
+```
+
+## Correlation
+The competition metric is correlation between your predictions and the targets.
+
+Visualising this:
+
+```{r, echo=FALSE}
+lastRunCorr = cor(pd$yhat, pd$y, use = "complete.obs")
+p =
+  ggplot(pd, aes(yhat, y)) +
+  geom_bin_2d() +
+  labs(
+    title = glue('yhat->y corr = {lastRunCorr}')
+  )
+
+ggplotly(p)
+```
+
+Remember, that's just for 1 run; we repeated that experiment `r numSamples` times!
+
+# Evaluation {.tabset}
+
+```{r}
+scores = getQuery('SELECT * FROM metrics WHERE name = $1', params = list(modelName))
+#DT::datatable(scores[,.(run_id, corr, mae, aae, rmse)])
+scores[,.(run_id, corr, mae, aae, rmse)]
+```
+
+```{r}
+p = performancePlot(scores[,corr])
+print(p)
+```
+
+## Absolute range performance plot
+
+```{r, echo=FALSE}
+print(p$absolutePlot)
+```
+
+## Relative range performance plot
+
+```{r, echo=FALSE}
+print(p$relativePlot)
+```
+
+## Interactive plots
+
+```{r, echo=FALSE}
+ggplotly(p$absolutePlot)
+ggplotly(p$relativePlot)
+```
+
+## Normality checks
+
+```{r, echo=FALSE}
+qqnorm(scores[,corr])
+qqline(scores[,corr])
+print(p$shapiro.test)
+```

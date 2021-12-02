@@ -55,17 +55,6 @@ doRun = \(name, trnAmt, tstAmt, assets, makeData, trainModel, predictModel) {
 
   stopifnot(!is.null(trn$x), !is.null(trn$y))
 
-  mt.model_fit_started_at(ms)
-  model = new.env()
-  trainModel(
-    model = model,
-    trn = trn,
-    ms = ms
-  )
-  mt.model_fit_finished_at(ms)
-
-  if (!is.null(model$description)) mt.description(ms, model$description)
-
   mt.mk_tst_started_at(ms)
   tst = new.env()
   makeData(
@@ -78,6 +67,18 @@ doRun = \(name, trnAmt, tstAmt, assets, makeData, trainModel, predictModel) {
   mt.mk_tst_finished_at(ms)
 
   stopifnot(!is.null(tst$x), !is.null(tst$y))
+
+  mt.model_fit_started_at(ms)
+  model = new.env()
+  trainModel(
+    model = model,
+    trn = trn,
+    tst = tst,
+    ms = ms
+  )
+  mt.model_fit_finished_at(ms)
+
+  if (!is.null(model$description)) mt.description(ms, model$description)
 
   mt.model_predict_started_at(ms)
   predictModel(

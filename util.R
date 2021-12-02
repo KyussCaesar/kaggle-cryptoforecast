@@ -30,17 +30,26 @@ cardinality = function(x) length(unique(x))
 rms = \(x) sqrt(mean(x*x))
 
 #' Subtract mean and divide by (uncorrected) standard deviation
-standardiser = \(x) {
+standardiser = \(mean, sd) {
   s = list(
-    mean = mean(x),
-    sd = sd(x)
+    mean = mean,
+    sd = sd
   )
 
-  class(s) <- c("standardiser")
+  class(s) <- append(class(s), c("standardiser"))
   s
 }
 
+as.standardiser = \(x, ...) UseMethod("as.standardiser", x)
+as.standardiser.numeric = \(x) standardiser(mean(x, na.rm = TRUE), sd(x, na.rm = TRUE))
+
+format.standardiser = \(s) glue('Standardiser(mean = {s$mean}, sd = {s$sd})')
+print.standardiser = \(s, ...) cat(format(s), ...)
+
 predict.standardiser = \(s, x) (x - s$mean) / s$sd
+
+backtransform = \(s, ...) UseMethod("backtransform", s)
+backtransform.standardiser = \(s, x) s$mean + x*s$sd
 
 #' Interpolate n points between start and stop.
 linspace = compiler::cmpfun(function(start, stop, n) {
