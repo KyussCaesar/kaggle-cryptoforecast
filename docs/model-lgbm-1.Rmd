@@ -1,5 +1,5 @@
 ---
-title: "Model: Basic LGBM (m.corr: 0.xxxxx)"
+title: "Model: Basic LGBM"
 author: "Antony"
 date: "2021-12-01"
 output:
@@ -35,7 +35,7 @@ trnAmt = 60 * 24 * 7 * 1 #
 tstAmt = 60 * 24 * 7 * 2 # 2 weeks, submission period will provide new data every 2 weeks
 assets = getAllAssets()
 
-numSamples = 200
+numSamples = 1
 ```
 
 # Data
@@ -186,8 +186,8 @@ predictModel = \(model, tst, ...) {
 ```
 
 # Method
-```{r method, results=FALSE, warning=FALSE}
-set.seed(2057944)
+```{r method, warning=FALSE, results=FALSE}
+set.seed(0296794)
 
 for (i in 1:numSamples) {
   results = doRun(
