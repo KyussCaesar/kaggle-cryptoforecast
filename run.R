@@ -20,7 +20,7 @@ getAllAssets = \() {
   .GlobalEnv[["ALL_ASSETS"]]
 }
 
-doRun = \(name, trnAmt, tstAmt, assets, makeData, trainModel, predictModel) {
+doRun = \(name, trnAmt, tstAmt, asset_ids, makeData, trainModel, predictModel) {
   ms = metrics()
   mt.name(ms, name)
   mt.trn_amt(ms, trnAmt)
@@ -28,15 +28,18 @@ doRun = \(name, trnAmt, tstAmt, assets, makeData, trainModel, predictModel) {
 
   dts = getAllTs()
 
-  lastTrainIdx = sample(trnAmt:(nrow(dts) - tstAmt - 15 - 1), 1)
+  minCutoff = trnAmt + 15
+  maxCutoff = nrow(dts) - tstAmt - 1
+  cutoffIdx = sample(minCutoff:maxCutoff, 1)
 
-  trnMinDate = dts[lastTrainIdx - trnAmt + 1,ts]
-  trnMaxDate = dts[lastTrainIdx,ts]
-  mt.trn_min_date(ms, trnMinDate)
+  # we cannot use the last 15 minutes for training because we would need future data
+  trnMaxDate = dts[cutoffIdx - 15,ts]
+  trnMinDate = dts[cutoffIdx - 15 - trnAmt,ts]
   mt.trn_max_date(ms, trnMaxDate)
+  mt.trn_min_date(ms, trnMinDate)
 
-  tstMinDate = dts[lastTrainIdx + 15 + 1,ts]
-  tstMaxDate = dts[lastTrainIdx + 15 + tstAmt,ts]
+  tstMinDate = dts[cutoffIdx,ts]
+  tstMaxDate = dts[cutoffIdx + tstAmt,ts]
   mt.tst_min_date(ms, tstMinDate)
   mt.tst_max_date(ms, tstMaxDate)
 
@@ -48,8 +51,9 @@ doRun = \(name, trnAmt, tstAmt, assets, makeData, trainModel, predictModel) {
     env = trn,
     minDate = trnMinDate,
     maxDate = trnMaxDate,
-    assets = assets,
-    ms = ms
+    asset_ids = asset_ids, # added 2021-12-04 replacing 'assets'
+    ms = ms,
+    assets = assets # deprecated
   )
   mt.mk_trn_finished_at(ms)
 
@@ -61,8 +65,9 @@ doRun = \(name, trnAmt, tstAmt, assets, makeData, trainModel, predictModel) {
     env = tst,
     minDate = tstMinDate,
     maxDate = tstMaxDate,
-    assets = assets,
-    ms = ms
+    asset_ids = asset_ids, # added 2021-12-04 replacing 'assets'
+    ms = ms,
+    assets = assets # deprecated
   )
   mt.mk_tst_finished_at(ms)
 

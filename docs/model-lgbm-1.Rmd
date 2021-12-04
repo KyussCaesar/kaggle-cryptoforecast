@@ -30,7 +30,7 @@ import(perfplot)
 
 # Parameters
 ```{r params}
-modelName = "smacd my lgbm up"
+modelName = "lgbm transform prediction"
 trnAmt = 60 * 24 * 7 * 1 # 
 tstAmt = 60 * 24 * 7 * 2 # 2 weeks, submission period will provide new data every 2 weeks
 assets = getAllAssets()
@@ -177,7 +177,8 @@ trainModel = \(model, trn, tst, ...) {
 }
 
 predictModel = \(model, tst, ...) {
-  # fwdTransform the data
+  # comment out as an optimisation because we already transformed it
+  # # fwdTransform the data
   # model$dataFwdTransform(tst)
 
   # generate prediction

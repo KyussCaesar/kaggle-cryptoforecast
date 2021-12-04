@@ -48,7 +48,7 @@ performancePlot = \(x) {
       geom_vline(xintercept = mean + 2.5*sd, color = "blue", alpha = 0.5) +
       mcorrAnn +
       labs(
-        title = glue('Distribution of corr ({plotRange})')
+        title = glue('Distribution of corr ({plotRange}) (98.76% CI)')
       )
   }
 
