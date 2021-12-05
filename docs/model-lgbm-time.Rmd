@@ -30,12 +30,12 @@ import(perfplot)
 
 # Parameters
 ```{r params}
-modelName = "lgbm with time features"
+modelName = "lgbm w/ time and l1"
 trnAmt = 60 * 24 * 7 * 52
 tstAmt = 60 * 24 * 7 * 2 # 2 weeks, submission period will provide new data every 2 weeks
 assets = getAllAssets()
 
-numSamples = 50
+numSamples = 100
 ```
 
 # Data

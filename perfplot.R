@@ -62,7 +62,7 @@ performancePlot = \(x) {
   results$sem = sem
   results$range = range
   results$binwidth = binwidth
-  results$shapiro.test = shapiro.test(x)
+  results$shapiro.test = if (length(x) > 3 & length(x) < 5000) shapiro.test(x) else "not enough data"
   results$t.test = t.test(x)
 
   class(results) <- append(class(results), "performancePlot")
